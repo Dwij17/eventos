@@ -1,0 +1,639 @@
+// EventOS - Complete Database Schema (MongoDB)
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER & AUTH
+// ============================================
+
+enum UserRole {
+  PARTICIPANT
+  ORGANIZER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+model User {
+  id              String     @id @default(auto()) @map("_id") @db.ObjectId
+  email           String     @unique
+  emailVerified   DateTime?
+  passwordHash    String
+  firstName       String
+  lastName        String
+  phone           String?
+  avatar          String?
+  role            UserRole   @default(PARTICIPANT)
+  status          UserStatus @default(ACTIVE)
+  dateOfBirth     DateTime?
+  gender          String?
+  city            String?
+  state           String?
+  country         String?
+  emergencyName   String?
+  emergencyPhone  String?
+  bloodGroup      String?
+  tShirtSize      String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  // Relations
+  organizer       Organizer?
+  registrations   Registration[]
+  tickets         Ticket[]
+  notifications   Notification[]
+  aiConversations AIConversation[]
+  accounts        Account[]
+  sessions        Session[]
+
+  @@index([role])
+}
+
+model Account {
+  id                String  @id @default(auto()) @map("_id") @db.ObjectId
+  userId            String  @db.ObjectId
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  sessionToken String   @unique
+  userId       String   @db.ObjectId
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ============================================
+// ORGANIZER
+// ============================================
+
+enum OrganizerStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+model Organizer {
+  id              String          @id @default(auto()) @map("_id") @db.ObjectId
+  userId          String          @unique @db.ObjectId
+  orgName         String
+  slug            String          @unique
+  description     String?
+  logo            String?
+  banner          String?
+  website         String?
+  phone           String?
+  email           String?
+  address         String?
+  city            String?
+  state           String?
+  country         String?
+  socialFacebook  String?
+  socialInstagram String?
+  socialTwitter   String?
+  socialYoutube   String?
+  status          OrganizerStatus @default(PENDING)
+  verified        Boolean         @default(false)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events          Event[]
+  volunteers      Volunteer[]
+  aiConversations AIConversation[]
+
+  @@index([status])
+}
+
+// ============================================
+// EVENT
+// ============================================
+
+enum EventStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  PUBLISHED
+  CANCELLED
+  COMPLETED
+}
+
+enum EventType {
+  RUNNING
+  CRICKET
+  FOOTBALL
+  FITNESS
+  COLLEGE
+  ENTERTAINMENT
+  OTHER
+}
+
+model Event {
+  id                String       @id @default(auto()) @map("_id") @db.ObjectId
+  organizerId       String       @db.ObjectId
+  title             String
+  slug              String       @unique
+  description       String?
+  shortDescription  String?
+  type              EventType
+  status            EventStatus  @default(DRAFT)
+  coverImage        String?
+  gallery           String[]
+  startDate         DateTime
+  endDate           DateTime
+  registrationStart DateTime?
+  registrationEnd   DateTime?
+  venueName         String?
+  venueAddress      String?
+  city              String?
+  state             String?
+  country           String?
+  latitude          Float?
+  longitude         Float?
+  maxParticipants   Int?
+  isOnline          Boolean      @default(false)
+  isFeatured        Boolean      @default(false)
+  tags              String[]
+  rules             String?
+  faq               Json?
+  termsConditions   String?
+  contactEmail      String?
+  contactPhone      String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  organizer         Organizer    @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  categories        EventCategory[]
+  registrations     Registration[]
+  announcements     Announcement[]
+  checkpoints       Checkpoint[]
+  results           Result[]
+  certificates      Certificate[]
+  eventRoutes       EventRoute[]
+  volunteers        Volunteer[]
+  coupons           Coupon[]
+  aiDocuments       AIDocument[]
+  aiConversations   AIConversation[]
+  matches           Match[]
+  teams             Team[]
+  pointsTable       PointsTableEntry[]
+
+  @@index([status])
+  @@index([type])
+  @@index([startDate])
+  @@index([city])
+  @@index([organizerId])
+}
+
+// ============================================
+// EVENT CATEGORIES & TICKETS
+// ============================================
+
+model EventCategory {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  eventId         String   @db.ObjectId
+  name            String
+  description     String?
+  price           Float    @default(0)
+  currency        String   @default("INR")
+  capacity        Int?
+  registeredCount Int      @default(0)
+  distance        Float?   // For running events (in km)
+  ageMin          Int?
+  ageMax          Int?
+  gender          String?  // M, F, or null for all
+  bibPrefix       String?
+  startTime       DateTime?
+  cutoffTime      DateTime?
+  sortOrder       Int      @default(0)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  event           Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  registrations   Registration[]
+  results         Result[]
+  checkpointTimes CheckpointTime[]
+
+  @@index([eventId])
+}
+
+// ============================================
+// REGISTRATION & PAYMENT
+// ============================================
+
+enum RegistrationStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  REFUNDED
+  CHECKED_IN
+  DNS // Did Not Start
+  DNF // Did Not Finish
+  FINISHED
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+model Registration {
+  id               String             @id @default(auto()) @map("_id") @db.ObjectId
+  userId           String             @db.ObjectId
+  eventId          String             @db.ObjectId
+  categoryId       String             @db.ObjectId
+  registrationNo   String             @unique
+  status           RegistrationStatus @default(PENDING)
+  bibNumber        String?
+  emergencyName    String?
+  emergencyPhone   String?
+  bloodGroup       String?
+  tShirtSize       String?
+  additionalInfo   Json?
+  checkedInAt      DateTime?
+  checkedInBy      String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  user             User               @relation(fields: [userId], references: [id])
+  event            Event              @relation(fields: [eventId], references: [id])
+  category         EventCategory      @relation(fields: [categoryId], references: [id])
+  payment          Payment?
+  ticket           Ticket?
+  checkpointTimes  CheckpointTime[]
+  result           Result?
+  certificate      Certificate?
+  refund           Refund?
+
+  @@unique([userId, eventId])
+  @@index([eventId])
+  @@index([categoryId])
+  @@index([status])
+}
+
+model Payment {
+  id                String        @id @default(auto()) @map("_id") @db.ObjectId
+  registrationId    String        @unique @db.ObjectId
+  amount            Float
+  currency          String        @default("INR")
+  status            PaymentStatus @default(PENDING)
+  razorpayOrderId   String?       @unique
+  razorpayPaymentId String?       @unique
+  razorpaySignature String?
+  method            String?
+  paidAt            DateTime?
+  metadata          Json?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  registration      Registration  @relation(fields: [registrationId], references: [id])
+
+  @@index([status])
+}
+
+model Ticket {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String   @db.ObjectId
+  registrationId String   @unique @db.ObjectId
+  ticketNumber   String   @unique
+  qrCode         String
+  issuedAt       DateTime @default(now())
+
+  user           User         @relation(fields: [userId], references: [id])
+  registration   Registration @relation(fields: [registrationId], references: [id])
+}
+
+model Refund {
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  registrationId   String   @unique @db.ObjectId
+  amount           Float
+  reason           String?
+  razorpayRefundId String?
+  status           String   @default("PENDING")
+  processedAt      DateTime?
+  createdAt        DateTime @default(now())
+
+  registration     Registration @relation(fields: [registrationId], references: [id])
+}
+
+// ============================================
+// SPORTS: CHECKPOINTS & RESULTS
+// ============================================
+
+model Checkpoint {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  eventId   String   @db.ObjectId
+  name      String
+  distance  Float?   // km from start
+  latitude  Float?
+  longitude Float?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  times     CheckpointTime[]
+
+  @@index([eventId])
+}
+
+model CheckpointTime {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  checkpointId   String   @db.ObjectId
+  registrationId String   @db.ObjectId
+  categoryId     String   @db.ObjectId
+  timestamp      DateTime
+  pace           Float?   // min/km
+  createdAt      DateTime @default(now())
+
+  checkpoint     Checkpoint    @relation(fields: [checkpointId], references: [id], onDelete: Cascade)
+  registration   Registration  @relation(fields: [registrationId], references: [id])
+  category       EventCategory @relation(fields: [categoryId], references: [id])
+
+  @@unique([checkpointId, registrationId])
+  @@index([registrationId])
+}
+
+model Result {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  eventId        String   @db.ObjectId
+  registrationId String   @unique @db.ObjectId
+  categoryId     String   @db.ObjectId
+  finishTime     Int?     // seconds
+  pace           Float?   // min/km
+  overallRank    Int?
+  categoryRank   Int?
+  genderRank     Int?
+  ageGroupRank   Int?
+  splits         Json?    // Array of split times
+  status         String   @default("FINISHED") // FINISHED, DNF, DNS, DQ
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  event          Event         @relation(fields: [eventId], references: [id])
+  registration   Registration  @relation(fields: [registrationId], references: [id])
+  category       EventCategory @relation(fields: [categoryId], references: [id])
+
+  @@index([eventId])
+  @@index([categoryId])
+  @@index([overallRank])
+}
+
+model Certificate {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  eventId         String   @db.ObjectId
+  registrationId  String   @unique @db.ObjectId
+  certificateUrl  String?
+  certificateData Json?
+  issuedAt        DateTime @default(now())
+
+  event           Event        @relation(fields: [eventId], references: [id])
+  registration    Registration @relation(fields: [registrationId], references: [id])
+}
+
+// ============================================
+// SPORTS: CRICKET/TOURNAMENT
+// ============================================
+
+model Team {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  eventId   String   @db.ObjectId
+  name      String
+  logo      String?
+  captain   String?
+  players   Player[]
+  createdAt DateTime @default(now())
+
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  homeMatches Match[] @relation("HomeTeam")
+  awayMatches Match[] @relation("AwayTeam")
+  pointsEntry PointsTableEntry?
+
+  @@index([eventId])
+}
+
+model Player {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  teamId     String   @db.ObjectId
+  name       String
+  role       String?  // Batsman, Bowler, All-rounder, WK
+  avatar     String?
+  stats      Json?
+  createdAt  DateTime @default(now())
+
+  team       Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+}
+
+enum MatchStatus {
+  SCHEDULED
+  LIVE
+  COMPLETED
+  CANCELLED
+}
+
+model Match {
+  id          String      @id @default(auto()) @map("_id") @db.ObjectId
+  eventId     String      @db.ObjectId
+  homeTeamId  String      @db.ObjectId
+  awayTeamId  String      @db.ObjectId
+  matchNumber Int
+  round       String?
+  venue       String?
+  startTime   DateTime
+  status      MatchStatus @default(SCHEDULED)
+  homeScore   String?
+  awayScore   String?
+  result      String?
+  scorecard   Json?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  event       Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  homeTeam    Team        @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeam    Team        @relation("AwayTeam", fields: [awayTeamId], references: [id])
+
+  @@index([eventId])
+  @@index([status])
+}
+
+model PointsTableEntry {
+  id       String @id @default(auto()) @map("_id") @db.ObjectId
+  eventId  String @db.ObjectId
+  teamId   String @unique @db.ObjectId
+  played   Int    @default(0)
+  won      Int    @default(0)
+  lost     Int    @default(0)
+  drawn    Int    @default(0)
+  nrr      Float  @default(0)
+  points   Int    @default(0)
+
+  event    Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  team     Team   @relation(fields: [teamId], references: [id])
+
+  @@index([eventId])
+}
+
+// ============================================
+// COMMUNICATION
+// ============================================
+
+model Announcement {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  eventId   String   @db.ObjectId
+  title     String
+  content   String
+  priority  String   @default("NORMAL") // LOW, NORMAL, HIGH, URGENT
+  createdAt DateTime @default(now())
+
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+}
+
+model Notification {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  title     String
+  message   String
+  type      String   // REGISTRATION, PAYMENT, ANNOUNCEMENT, RESULT, SYSTEM
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([read])
+}
+
+// ============================================
+// VOLUNTEERS & COUPONS
+// ============================================
+
+model Volunteer {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  eventId      String   @db.ObjectId
+  organizerId  String   @db.ObjectId
+  name         String
+  email        String?
+  phone        String?
+  role         String?
+  assignedArea String?
+  createdAt    DateTime @default(now())
+
+  event       Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  organizer   Organizer @relation(fields: [organizerId], references: [id])
+
+  @@index([eventId])
+}
+
+model Coupon {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  eventId       String    @db.ObjectId
+  code          String
+  discountType  String    // PERCENTAGE, FIXED
+  discountValue Float
+  maxUses       Int?
+  usedCount     Int       @default(0)
+  validFrom     DateTime?
+  validUntil    DateTime?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+
+  event         Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, code])
+}
+
+// ============================================
+// EVENT ROUTES (MAP)
+// ============================================
+
+model EventRoute {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  eventId     String   @db.ObjectId
+  name        String
+  description String?
+  distance    Float?   // km
+  routeData   Json?    // GeoJSON
+  color       String?  @default("#FF6B00")
+  createdAt   DateTime @default(now())
+
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+}
+
+// ============================================
+// AI
+// ============================================
+
+model AIDocument {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  eventId   String   @db.ObjectId
+  title     String
+  content   String
+  type      String   // FAQ, RULES, INFO, LOGISTICS
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+}
+
+model AIConversation {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String?  @db.ObjectId
+  organizerId String?  @db.ObjectId
+  eventId     String?  @db.ObjectId
+  type        String   // PARTICIPANT_ASSISTANT, ORGANIZER_ANALYST
+  messages    Json     // Array of {role, content, timestamp}
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User?      @relation(fields: [userId], references: [id])
+  organizer   Organizer? @relation(fields: [organizerId], references: [id])
+  event       Event?     @relation(fields: [eventId], references: [id])
+
+  @@index([userId])
+  @@index([organizerId])
+  @@index([eventId])
+}
